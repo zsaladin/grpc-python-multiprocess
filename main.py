@@ -32,36 +32,40 @@ class Greeter(helloworld_pb2_grpc.GreeterServicer):
         return helloworld_pb2.HelloReply(message='Hello, %s!' % request.name)
 
 
-def multiprocess(event:multiprocessing.Event):
-    channel = grpc.insecure_channel('localhost:50051')
+def request(port, message):
+    channel = grpc.insecure_channel('localhost:' + str(port))
     stub = helloworld_pb2_grpc.GreeterStub(channel)
-    response = stub.SayHello(helloworld_pb2.HelloRequest(name='first'))
-    print("Greeter multiprocess received: " + response.message)
+    response = stub.SayHello(helloworld_pb2.HelloRequest(name=message))
+    print("Received: " + response.message)
 
+
+def serve(port) -> grpc.Server:
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
     helloworld_pb2_grpc.add_GreeterServicer_to_server(Greeter(), server)
-    server.add_insecure_port('[::]:60051')
+    server.add_insecure_port('[::]:' + str(port))
     server.start()
+    return server
+
+
+def multiprocess(event: multiprocessing.Event):
+    request(50051, 'hello')
+    server = serve(60051)
 
     event.set()
     time.sleep(10)
+    server.stop(None)
 
 
 def run():
-    server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
-    helloworld_pb2_grpc.add_GreeterServicer_to_server(Greeter(), server)
-    server.add_insecure_port('[::]:50051')
-    server.start()
+    server = serve(50051)
 
     event = multiprocessing.Event()
     process = multiprocessing.Process(target=multiprocess, args=(event,))
     process.start()
     event.wait()
 
-    channel = grpc.insecure_channel('localhost:60051')
-    stub = helloworld_pb2_grpc.GreeterStub(channel)
-    response = stub.SayHello(helloworld_pb2.HelloRequest(name='second'))
-    print("Greeter main process received: " + response.message)
+    server.stop(None)
+    request(60051, 'hi')
 
 
 if __name__ == '__main__':
