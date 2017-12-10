@@ -62,6 +62,8 @@ def run():
     event = multiprocessing.Event()
     process = multiprocessing.Process(target=multiprocess, args=(event,))
     process.start()
+
+    # server = serve(50051)
     event.wait()
 
     server.stop(None)
